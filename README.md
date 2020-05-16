@@ -134,6 +134,85 @@ Then in your java code, you could use it as follows:
     } // close ssh transport session
 ```
 
+Quite a few use cases require connecting to multiple devices but do not wish to wait for the operation to finish. A helper method to do a one of operations with a bunch of devices could look like follows:
+```java
+  /**
+   * Creates a netconf session with deviceIP:830 using the given credentials and once the capabilties
+   * are exchanged successfully, use the function to derive a future using the session. Teardown the
+   * netconf session only after the future is completed. The exceptions encountered while setting up
+   * the session are thrown by the method, the errors encountered while using the session are reported
+   * via API exposed by the return value. Whereas any errors encountered after the returned future is
+   * already complete are reported via the consumer passed as postComplete argument.
+   */   
+  public static <T> CompletableFuture<T> invokeNetConfRPC(String deviceIP, Credentials creds,
+                                                          Function<NetConfSession, CompletableFuture<T>> function
+                                                          Consumer<Throwable> postComplete) throws IOException, JNCException
+  {
+    CompletableFuture<T> retvalue;
+    
+    // we keep track of all the resources we allocate. if this try block ever throws
+    // an exception, we free up the resources allocated immediately. If it completes
+    // normally, we defer the freeing up the resources until we are done with the RPC
+    // call.
+    try (final Closeables closeables = new Closeables("Could not invoke rpc {} to device {}", function, deviceIP)) {
+      SSHSessionFactory factory = new SSHSessionFactory();
+      closeables.add(factory); // deffer
+      SSHSession session = factory.getSession(deviceIP, 830, creds);
+      closeables.add(session); // deffer
+      SSHByteBufferChannel channel = session.getChannel(30, SECONDS);
+      closeables.add(channel); // deffer
+      final NetConfSession client = new NetConfSession(channel, StandardCharsets.UTF_8);
+      CompletableFuture<AutoCloseable> hello = client.hello(30, 30, SECONDS);
+      closeables.add(() -> { // deffer
+        // close only if we should!
+        if (!hello.isCompletedExceptionally()) {
+          hello.get().close();
+        }
+      });
+
+      // schedule the rpc call if hello has succeeded, save the return value
+      retvalue = hello.thenCompose(ac -> function.apply(client));
+      
+      // when rpc is done, tear down freeing all the deferred resource along the way
+      retvalue.whenComplete((x, y) -> {
+        try {
+          synchronized (closeables) {
+            closeables.expose();
+            closeables.close();
+          }
+          postComplete.accept(null);
+        } catch (Throwable th) {
+          postComplete.accept(th);
+        }
+      });
+
+      // we protect/export & close the resources in the synchronized block because
+      // there is a possibility that futures are executing as we are scheduling them
+      // we do not want the protect to kick in while we are closing the closeables.
+      synchronized (closeables) {
+        closeables.protect();
+      }
+    }
+
+    // return the future we saved obtained by calling netconf rpc.
+    return retvalue;
+  }
+```
+
+And then from elsewhere in your code you could e.g. make a netconf get call against multiple devices at once:
+```java
+  for (String deviceIP : devices) {
+    CompletableFuture<NodeSet> result = invokeNetConfRPC(deviceIP, creds, 
+                                                         client -> client.get("version", 30, 90, SECONDS),
+                                                         th -> {
+                                                           if (th != null) {
+                                                             logger.warn("ignoring postresult for {}", deviceIP, th);
+                                                           }
+                                                         });
+    map.put(deviceIP, result); // save the results for later tracking
+  }
+```
+
 Also note that almost for all the calls on the `NetConfSession` object, the return type is `CompletableFuture`; It's intentionally that way so that you could use all the APIs available for `CompletableFuture` introduced in Java 8 and enhanced in Java 9 while using this library.
 
 As a side note, the library used some features available only in Java 9, so I had to mandate use of Java 11 which is the next Long Term Support Java Release after Java 8.
