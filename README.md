@@ -40,7 +40,7 @@ To use the package, you need to use following Maven dependency:
 <properties>
   ...
   <!-- Use the latest version whenever possible. -->
-  <celeral.version.netconf>1.0.0</celeral.version.netconf>
+  <celeral.version.netconf>1.1.0</celeral.version.netconf>
   ...
 </properties>
 
