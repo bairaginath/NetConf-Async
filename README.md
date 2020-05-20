@@ -145,7 +145,7 @@ Quite a few use cases require connecting to multiple devices but do not wish to 
    * already complete are reported via the consumer passed as postComplete argument.
    */   
   public static <T> CompletableFuture<T> invokeNetConfRPC(String deviceIP, Credentials creds,
-                                                          Function<NetConfSession, CompletableFuture<T>> function
+                                                          Function<NetConfSession, CompletableFuture<T>> function,
                                                           Consumer<Throwable> postComplete) throws IOException, JNCException
   {
     CompletableFuture<T> retvalue;
