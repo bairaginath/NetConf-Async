@@ -102,7 +102,7 @@ Then in your java code, you could use it as follows:
         CompletableFuture<AutoCloseable> hello = netconf.hello(3000000, 3000000, TimeUnit.MICROSECONDS);
         try (AutoCloseable ac = hello.join()) {
           CompletableFuture<NodeSet> software = netconf.get("software", 30, 30, TimeUnit.SECONDS);
-          CompletableFuture<Element> reboot = session.action(getRebootAction(), 1, 30, TimeUnit.MINUTES);
+          CompletableFuture<Element> reboot = netconf.action(getRebootAction(), 1, 30, TimeUnit.MINUTES);
           
           reboot.join();
                     
