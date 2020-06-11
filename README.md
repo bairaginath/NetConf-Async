@@ -156,14 +156,14 @@ Quite a few use cases require connecting to multiple devices but do not wish to 
     // call.
     try (final Closeables closeables = new Closeables("Could not invoke rpc {} to device {}", function, deviceIP)) {
       SSHSessionFactory factory = new SSHSessionFactory();
-      closeables.add(factory); // deffer
+      closeables.add(factory); // defer
       SSHSession session = factory.getSession(deviceIP, 830, creds);
-      closeables.add(session); // deffer
+      closeables.add(session); // defer
       SSHByteBufferChannel channel = session.getChannel(30, SECONDS);
-      closeables.add(channel); // deffer
+      closeables.add(channel); // defer
       final NetConfSession client = new NetConfSession(channel, StandardCharsets.UTF_8);
       CompletableFuture<AutoCloseable> hello = client.hello(30, 30, SECONDS);
-      closeables.add(() -> { // deffer
+      closeables.add(() -> { // defer
         // close only if we should!
         if (!hello.isCompletedExceptionally()) {
           hello.get().close();
